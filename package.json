@@ -1,0 +1,15 @@
+{
+  "name": "continuity-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A deterministic character-continuity engine for interactive stories.",
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/engine.js && node --check src/scenario.js && node --check src/app.js",
+    "test": "node --test",
+    "verify": "npm run check && npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
