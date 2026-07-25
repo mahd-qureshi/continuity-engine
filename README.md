@@ -6,6 +6,8 @@
 
 **Status:** v0.1 experiment · framework-free · zero API calls
 
+**[Open the live demo](https://mahd-qureshi.github.io/continuity-engine/)**
+
 Many AI character prototypes delegate memory and narrative decisions to a
 model, making the resulting path difficult to replay or inspect. I built
 Continuity Engine to explore a narrower question:
