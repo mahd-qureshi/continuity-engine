@@ -19,8 +19,17 @@ test("interactive controls expose accessible names", () => {
 });
 
 test("keyboard reset and reduced-motion behavior stay present", () => {
-  assert.match(app, /event\.key\.toLowerCase\(\) === "r"/);
+  assert.match(app, /const key = event\.key\.toLowerCase\(\)/);
+  assert.match(app, /if \(key === "r"\) resetStory\(\)/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+});
+
+test("sharing a playthrough is wired to the deterministic replay code", () => {
+  assert.match(index, /id="share-button"/);
+  assert.match(app, /encodeShareCode\(state\)/);
+  assert.match(app, /decodeShareCode\(orbitalRelay, code, advanceStory\)/);
+  // The URL must track the story, so copying the address bar is enough.
+  assert.match(app, /window\.history\.replaceState/);
 });
 
 test("one-time choices are disabled by engine eligibility", () => {

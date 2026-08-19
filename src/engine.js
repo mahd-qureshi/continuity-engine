@@ -1,12 +1,12 @@
 const SCORE_PRECISION = 4;
 
-const METRIC_RANGES = {
+export const METRIC_RANGES = Object.freeze({
   trust: [0, 1],
   tension: [0, 1],
   "affect.valence": [-1, 1],
   "affect.arousal": [0, 1],
   "affect.control": [0, 1],
-};
+});
 
 export const DEFAULT_MEMORY_WEIGHTS = Object.freeze({
   tags: 0.4,

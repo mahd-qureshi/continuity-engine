@@ -4,7 +4,7 @@
 > remembers choices, updates emotional state, and explains what should happen
 > next.
 
-**Status:** v0.1 experiment · framework-free · zero API calls
+**Status:** v0.2 experiment · framework-free · zero API calls
 
 **[Open the live demo](https://mahd-qureshi.github.io/continuity-engine/)**
 
@@ -139,12 +139,61 @@ explicit state, and decisions you can inspect.
 - [Use a deterministic core instead of an LLM](docs/adr/001-deterministic-core.md)
 - [Use events instead of mutable session state](docs/adr/002-event-sourced-state.md)
 
+## What 0.2 added
+
+The 0.1 README listed four things as next. All four are in.
+
+### Scenario validation at the boundary
+
+`validateScenario` collects every problem in one pass instead of throwing on
+the first. Beyond types and duplicate ids, it computes an interval
+over-approximation of what each metric can ever reach, and flags content gated
+behind a value the scenario cannot produce:
+
+```text
+warn  beats[3].requires[0]  affect.control can only reach 0.22..0.7 in this
+                            scenario, so "affect.control >= 0.99" never holds
+                            and this content is dead.
+```
+
+The approximation is unsound in one direction only: it can call a value
+reachable when no legal path reaches it, but never the reverse. So a warning is
+always a real problem. `npm run validate` runs it in CI.
+
+### Property-based tests
+
+The engine is pure and deterministic, so invariants can be checked over
+generated inputs rather than hand-picked examples — that the planner never
+schedules an ineligible beat, that a plan never exceeds its horizon, that
+applied deltas always land inside their declared range, that affect never
+overshoots its baseline.
+
+The harness is ~150 lines with no dependency. It seeds every run so failures
+reproduce, and shrinks counterexamples by bisection rather than decrement,
+which is the difference between reporting `844` and reporting the actual
+boundary at `500`.
+
+### Replay files and share codes
+
+A replay file carries every event plus a fingerprint of the final state, so a
+future engine that replays those events differently is detected instead of
+quietly loading.
+
+Share codes carry **only the choice ids**. Beats, memories, and affect are all
+recomputed, so a whole playthrough fits in a URL — and that only works because
+the engine is deterministic. The demo keeps `?replay=` in the address bar as
+you play. A hand-edited link cannot reach a state a real playthrough could not.
+
+### Weight sensitivity
+
+Of 286 weightings on a simplex grid, only 5.2% reproduce the default recall,
+and tag overlap is by far the most stable component. Full write-up in
+[docs/experiments/weight-sensitivity.md](docs/experiments/weight-sensitivity.md).
+
 ## Next
 
-- Validate scenario data at the boundary.
-- Add property-based tests for planner invariants.
-- Export and import replay files.
-- Measure how different scoring weights alter perceived continuity.
+- Score recall against human judgements rather than against the default.
+- Support more than two characters in a scene.
 
 ## License
 

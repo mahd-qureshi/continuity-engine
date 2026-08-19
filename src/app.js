@@ -5,6 +5,7 @@ import {
   stateFingerprint,
 } from "./engine.js";
 import { orbitalRelay } from "./scenario.js";
+import { decodeShareCode, encodeShareCode } from "./replay.js";
 
 const MAX_TURNS = 5;
 
@@ -31,11 +32,28 @@ const elements = Object.fromEntries(
     "planner-score",
     "trace-list",
     "reset-button",
+    "share-button",
     "scene-card",
   ].map((id) => [id, document.getElementById(id)]),
 );
 
-let state = startScenario(orbitalRelay);
+// A share link carries only the choice ids; every beat, memory, and affect
+// value below is recomputed from them. If the engine were not deterministic
+// this would not be possible, so a broken link is a broken claim.
+function stateFromLocation() {
+  const code = new URLSearchParams(window.location.search).get("replay");
+  if (!code) return startScenario(orbitalRelay);
+
+  try {
+    return decodeShareCode(orbitalRelay, code, advanceStory);
+  } catch (error) {
+    // A hand-edited or stale link should not brick the page.
+    console.warn("Ignoring an invalid share link:", error.message);
+    return startScenario(orbitalRelay);
+  }
+}
+
+let state = stateFromLocation();
 let latestTurn = null;
 
 function createElement(tag, className, text) {
@@ -98,6 +116,10 @@ function handleChoice(choiceId) {
     planner: { horizon: 3, beamWidth: 4 },
   });
   state = latestTurn.nextState;
+
+  // Keep the address bar in step with the story, so the URL is always a link
+  // to exactly what is on screen without anyone pressing a button.
+  window.history.replaceState(null, "", `?replay=${encodeShareCode(state)}`);
 
   elements["scene-card"].classList.remove("is-advancing");
   requestAnimationFrame(() => {
@@ -314,14 +336,45 @@ function resetStory() {
   state = startScenario(orbitalRelay);
   latestTurn = null;
   elements["scene-card"].classList.remove("is-advancing");
+  window.history.replaceState(null, "", window.location.pathname);
   render();
 }
 
-elements["reset-button"].addEventListener("click", resetStory);
-document.addEventListener("keydown", (event) => {
-  if (event.key.toLowerCase() === "r" && !event.metaKey && !event.ctrlKey) {
-    resetStory();
+function shareLink() {
+  const url = new URL(window.location.href);
+  url.search = state.events.length > 0 ? `?replay=${encodeShareCode(state)}` : "";
+  return url.toString();
+}
+
+async function copyShareLink() {
+  const link = shareLink();
+  const button = elements["share-button"];
+  const original = button.textContent;
+
+  try {
+    await navigator.clipboard.writeText(link);
+    button.textContent = "Link copied";
+  } catch {
+    // Clipboard access is denied in some contexts; showing the URL still lets
+    // someone copy it by hand, which is better than a button that does nothing.
+    window.prompt("Copy this link:", link);
+    button.textContent = original;
+    return;
   }
+
+  setTimeout(() => {
+    button.textContent = original;
+  }, 1600);
+}
+
+elements["reset-button"].addEventListener("click", resetStory);
+elements["share-button"].addEventListener("click", copyShareLink);
+document.addEventListener("keydown", (event) => {
+  if (event.metaKey || event.ctrlKey) return;
+
+  const key = event.key.toLowerCase();
+  if (key === "r") resetStory();
+  if (key === "s") copyShareLink();
 });
 
 render();
