@@ -1,210 +1,235 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f5f3ed" />
     <meta
       name="description"
-      content="A deterministic character-continuity engine for interactive stories."
+      content="One character. Five decisions. A story that remembers. An interactive character study by Mahd Qureshi."
     />
-    <meta name="theme-color" content="#080b0f" />
-    <title>Continuity Engine — A story system that shows its work</title>
+    <meta
+      property="og:title"
+      content="Continuity Engine — It starts with one person."
+    />
+    <meta
+      property="og:description"
+      content="Meet Mara. Make her next decision. Discover what she carries into the next one."
+    />
+    <meta
+      property="og:image"
+      content="https://mahd-qureshi.github.io/continuity-engine/assets/mara-platform.jpg"
+    />
+    <title>Continuity Engine — A story that remembers</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./src/styles.css" />
-    <script type="module" src="./src/app.js"></script>
   </head>
   <body>
-    <div class="noise" aria-hidden="true"></div>
-
-    <header class="topbar">
-      <a class="brand" href="./" aria-label="Continuity Engine home">
-        <span class="brand__mark" aria-hidden="true">CE</span>
-        <span>
-          <strong>Continuity Engine</strong>
-          <small>v0.1 · deterministic narrative systems</small>
-        </span>
-      </a>
-
-      <div class="topbar__actions">
-        <span class="signal"><i aria-hidden="true"></i> zero API calls</span>
-        <button class="button button--quiet" id="share-button" type="button">
-          Copy share link
-          <kbd>S</kbd>
-        </button>
-        <button class="button button--quiet" id="reset-button" type="button">
-          Reset story
-          <kbd>R</kbd>
+    <a class="skip-link" href="#scene">Skip to the story</a>
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="wordmark" href="./" aria-label="Continuity Engine home"
+          ><svg viewBox="0 0 28 32" fill="none" aria-hidden="true">
+            <path
+              d="M7 3v26M7 10c13 0 14 4 14 13v6"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+            <circle cx="7" cy="3" r="2.5" fill="currentColor" />
+            <circle cx="7" cy="29" r="2.5" fill="currentColor" />
+            <circle cx="21" cy="29" r="2.5" fill="currentColor" /></svg
+          ><span>Continuity<br />Engine</span></a
+        >
+        <nav aria-label="Project">
+          <button id="about-button" class="text-button">
+            About the project</button
+          ><a
+            href="https://github.com/mahd-qureshi/continuity-engine"
+            target="_blank"
+            rel="noreferrer"
+            >Source <span aria-hidden="true">↗</span></a
+          >
+        </nav>
+      </header>
+      <main>
+        <section class="introduction" aria-labelledby="page-title">
+          <p class="eyebrow">
+            An interactive character study <span class="intro-line"></span> No.
+            001
+          </p>
+          <h1 id="page-title">It starts with <em>one person.</em></h1>
+          <p class="intro-description">
+            You make her decisions. She carries them with her.
+          </p>
+        </section>
+        <div id="notice" class="notice" role="status" hidden></div>
+        <section class="story-layout" aria-label="Before the last train">
+          <aside class="character-panel" aria-label="Meet Mara">
+            <figure class="portrait">
+              <img
+                src="./assets/mara-platform.jpg"
+                alt="Mara, in an olive coat, considering a message on an otherwise empty station platform."
+                width="960"
+                height="1200"
+                fetchpriority="high"
+              />
+              <figcaption>
+                <span class="portrait-label">The person at the centre</span
+                ><span class="character-name"
+                  >Mara<span class="character-age">24</span></span
+                ><span class="character-description"
+                  >Restores old things.<br />Learning when to let them go.</span
+                >
+              </figcaption>
+            </figure>
+            <div class="character-note">
+              <span class="small-dot" aria-hidden="true"></span>
+              <p>
+                One evening. Five decisions.<br /><span
+                  >No right answers. Just what follows.</span
+                >
+              </p>
+            </div>
+          </aside>
+          <div class="story-column">
+            <div class="scene-meta">
+              <span id="scene-location">Platform 02 · 23:04</span
+              ><span id="scene-count">01 / 05</span>
+            </div>
+            <div
+              id="progress"
+              class="progress"
+              aria-label="Story progress"
+            ></div>
+            <article
+              id="scene"
+              tabindex="-1"
+              aria-label="Current scene"
+            ></article>
+            <div class="story-tools">
+              <button class="text-button" id="undo-button" disabled>
+                <span aria-hidden="true">↶</span> Go back</button
+              ><span id="save-status">Saved on this device</span
+              ><button class="text-button" id="history-button" disabled>
+                Your path <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </div>
+        </section>
+        <section class="continuity-note" aria-label="About continuity">
+          <span class="note-index">01 — 05</span>
+          <p>
+            A choice doesn’t disappear when you turn the page.<br /><span
+              >It changes what Mara says, remembers, and does next.</span
+            >
+          </p>
+          <button id="share-button" class="text-button">
+            Share this path <span aria-hidden="true">↗</span>
+          </button>
+        </section>
+      </main>
+      <footer>
+        <a href="https://www.mahdqureshi.com/">A project by Mahd Qureshi</a
+        ><span>Written choices. Remembered consequences.</span
+        ><button id="reset-button" class="text-button">Start again</button>
+      </footer>
+    </div>
+    <dialog id="about-dialog" aria-labelledby="about-title">
+      <div class="dialog-header">
+        <span class="eyebrow">Behind the story</span
+        ><button class="close-button" data-close aria-label="Close about">
+          ×
         </button>
       </div>
-    </header>
-
-    <main class="workspace">
-      <section class="story-column" aria-labelledby="story-title">
-        <article class="scene-card" id="scene-card">
-          <div class="scene-card__copy">
-            <p class="eyebrow" id="scenario-eyebrow"></p>
-            <h1 id="story-title"></h1>
-            <p class="scene-card__line" id="story-line" aria-live="polite"></p>
-          </div>
-
-          <div class="orbital-view" aria-hidden="true">
-            <div class="orbit orbit--outer"></div>
-            <div class="orbit orbit--inner"></div>
-            <div class="relay">
-              <span class="relay__core"></span>
-              <span class="relay__wing relay__wing--left"></span>
-              <span class="relay__wing relay__wing--right"></span>
-            </div>
-            <span class="star star--one"></span>
-            <span class="star star--two"></span>
-            <span class="star star--three"></span>
-          </div>
-
-          <footer class="scene-card__footer">
-            <span id="turn-label">Scene start</span>
-            <span class="fingerprint">
-              state
-              <code id="state-fingerprint"></code>
-            </span>
-          </footer>
-        </article>
-
-        <section class="metric-grid" aria-label="Character state">
-          <article class="metric">
-            <div class="metric__header">
-              <span>Trust</span>
-              <strong id="trust-value">0</strong>
-            </div>
-            <div
-              class="metric__track"
-              role="meter"
-              aria-label="Trust"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              id="trust-meter"
-            >
-              <span class="metric__fill metric__fill--trust" id="trust-fill"></span>
-            </div>
-            <small>relationship state</small>
-          </article>
-
-          <article class="metric">
-            <div class="metric__header">
-              <span>Tension</span>
-              <strong id="tension-value">0</strong>
-            </div>
-            <div
-              class="metric__track"
-              role="meter"
-              aria-label="Tension"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              id="tension-meter"
-            >
-              <span
-                class="metric__fill metric__fill--tension"
-                id="tension-fill"
-              ></span>
-            </div>
-            <small>dramatic pressure</small>
-          </article>
-
-          <article class="metric">
-            <div class="metric__header">
-              <span>Valence</span>
-              <strong id="valence-value">0</strong>
-            </div>
-            <div
-              class="metric__track"
-              role="meter"
-              aria-label="Emotional valence"
-              aria-valuemin="-100"
-              aria-valuemax="100"
-              id="valence-meter"
-            >
-              <span
-                class="metric__fill metric__fill--valence"
-                id="valence-fill"
-              ></span>
-            </div>
-            <small>emotional direction</small>
-          </article>
-        </section>
-
-        <section class="choice-panel" aria-labelledby="choice-title">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Your move</p>
-              <h2 id="choice-title">What should Mara do?</h2>
-            </div>
-            <span class="section-heading__note">Five turns · no correct path</span>
-          </div>
-          <div class="choice-grid" id="choice-list"></div>
-        </section>
-
-        <section class="timeline-panel" aria-labelledby="timeline-title">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Event log</p>
-              <h2 id="timeline-title">What the engine can replay</h2>
-            </div>
-            <span class="section-heading__note">immutable events</span>
-          </div>
-          <ol class="timeline" id="timeline"></ol>
-        </section>
-      </section>
-
-      <aside class="inspector" aria-labelledby="inspector-title">
-        <div class="inspector__intro">
-          <p class="eyebrow">Engine inspector</p>
-          <h2 id="inspector-title">Why this path?</h2>
-          <p>
-            Inspect the scores behind each recalled memory, selected beat, and
-            rejected alternative.
-          </p>
-        </div>
-
-        <section class="inspector-section" aria-labelledby="memory-title">
-          <div class="inspector-section__heading">
-            <h3 id="memory-title">Recalled memories</h3>
-            <span>MMR · λ 0.72</span>
-          </div>
-          <div class="memory-list" id="memory-list"></div>
-        </section>
-
-        <section class="inspector-section" aria-labelledby="plan-title">
-          <div class="inspector-section__heading">
-            <h3 id="plan-title">Three-beat plan</h3>
-            <span id="planner-score">beam width 4</span>
-          </div>
-          <ol class="plan-list" id="plan-list"></ol>
-        </section>
-
-        <details class="trace">
-          <summary>
-            <span>Why the first beat?</span>
-            <span aria-hidden="true">+</span>
-          </summary>
-          <div class="trace-list" id="trace-list"></div>
-        </details>
-
-        <div class="formula">
-          <span>memory score</span>
-          <code>.40 tags + .25 recency + .20 intensity + .15 relationship</code>
-        </div>
-      </aside>
-    </main>
-
-    <footer class="page-footer">
+      <h2 id="about-title">What makes it continuity?</h2>
       <p>
-        Original scenario. Deterministic core. Framework-free demo.
+        Mara’s next scene depends on what you’ve already chosen. Starting an
+        email together can open a later option. Avoiding a conversation can
+        change how it begins.
       </p>
       <p>
-        Built to explore one question:
-        <strong>can a story system show its work?</strong>
+        Every decision is recorded. Rewind to one of them and the story rebuilds
+        from that point. Finish two paths to see what changed.
       </p>
-    </footer>
-
-    <noscript>This demo needs JavaScript to run the local story engine.</noscript>
+      <div class="about-rule">
+        <p class="eyebrow">Small by design</p>
+        <p>
+          One authored story. Five decisions. No generated dialogue, model
+          calls, or account required. Your progress stays in this browser;
+          sharing a link includes your choices.
+        </p>
+      </div>
+      <a
+        class="primary-link"
+        href="https://github.com/mahd-qureshi/continuity-engine"
+        target="_blank"
+        rel="noreferrer"
+        >Read the code <span aria-hidden="true">↗</span></a
+      >
+    </dialog>
+    <dialog id="history-dialog" aria-labelledby="history-title">
+      <div class="dialog-header">
+        <span class="eyebrow">The choices she carries</span
+        ><button class="close-button" data-close aria-label="Close your path">
+          ×
+        </button>
+      </div>
+      <h2 id="history-title">Your path, so far.</h2>
+      <p>Return to a decision to try something different.</p>
+      <ol id="history-list" class="history-list"></ol>
+    </dialog>
+    <dialog id="share-dialog" aria-labelledby="share-title">
+      <div class="dialog-header">
+        <span class="eyebrow">Same choices. Same story.</span
+        ><button class="close-button" data-close aria-label="Close sharing">
+          ×
+        </button>
+      </div>
+      <h2 id="share-title">Pass this path on.</h2>
+      <p>
+        The link recreates your decisions, including the point you’ve reached.
+      </p>
+      <label for="share-url">Your story link</label
+      ><input id="share-url" type="text" readonly /><button
+        id="copy-button"
+        class="primary-button"
+      >
+        Copy link <span aria-hidden="true">↗</span>
+      </button>
+      <p id="copy-status" role="status"></p>
+    </dialog>
+    <dialog id="reset-dialog" aria-labelledby="reset-title">
+      <div class="dialog-header">
+        <span class="eyebrow">A fresh page</span
+        ><button
+          class="close-button"
+          data-close
+          aria-label="Cancel starting again"
+        >
+          ×
+        </button>
+      </div>
+      <h2 id="reset-title">Meet Mara again?</h2>
+      <p>
+        Your current decisions will be cleared. Your last completed ending stays
+        available for comparison.
+      </p>
+      <button id="confirm-reset" class="primary-button">
+        Start a new path <span aria-hidden="true">→</span>
+      </button>
+    </dialog>
+    <div
+      id="announcer"
+      class="sr-only"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
+    <noscript
+      ><p class="noscript">
+        Enable JavaScript to make decisions in this story. No account or
+        external service is needed.
+      </p></noscript
+    >
+    <script type="module" src="./src/app.js"></script>
   </body>
 </html>
