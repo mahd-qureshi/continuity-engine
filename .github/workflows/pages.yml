@@ -26,13 +26,28 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify before publishing
+        run: npm run verify
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
+
+      - name: Stage public files
+        run: |
+          mkdir -p _site/assets
+          cp index.html favicon.svg _site/
+          cp -R src _site/src
+          rsync -a --exclude '/mara-platform.png' assets/ _site/assets/
 
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
       - name: Deploy to GitHub Pages
         id: deployment

@@ -1,380 +1,379 @@
 import {
-  advanceStory,
-  evaluateChoiceEligibility,
-  startScenario,
-  stateFingerprint,
-} from "./engine.js";
-import { orbitalRelay } from "./scenario.js";
-import { decodeShareCode, encodeShareCode } from "./replay.js";
+  createStory,
+  choose,
+  rewind,
+  serialize,
+  deserialize,
+  getScene,
+  getEnding,
+} from "./continuity.js";
 
-const MAX_TURNS = 5;
+const SESSION_KEY = "continuity.mara.v1";
+const ENDING_KEY = "continuity.mara.ending.v1";
+const $ = (id) => document.getElementById(id);
+const sceneRoot = $("scene");
+let state = createStory();
+let previousEnding = null;
+let storageAvailable = true;
 
-const elements = Object.fromEntries(
-  [
-    "scenario-eyebrow",
-    "story-title",
-    "story-line",
-    "turn-label",
-    "state-fingerprint",
-    "trust-value",
-    "trust-fill",
-    "trust-meter",
-    "tension-value",
-    "tension-fill",
-    "tension-meter",
-    "valence-value",
-    "valence-fill",
-    "valence-meter",
-    "choice-list",
-    "timeline",
-    "memory-list",
-    "plan-list",
-    "planner-score",
-    "trace-list",
-    "reset-button",
-    "share-button",
-    "scene-card",
-  ].map((id) => [id, document.getElementById(id)]),
-);
-
-// A share link carries only the choice ids; every beat, memory, and affect
-// value below is recomputed from them. If the engine were not deterministic
-// this would not be possible, so a broken link is a broken claim.
-function stateFromLocation() {
-  const code = new URLSearchParams(window.location.search).get("replay");
-  if (!code) return startScenario(orbitalRelay);
-
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function notice(text) {
+  $("notice").textContent = text;
+  $("notice").hidden = !text;
+}
+function readSaved(key) {
   try {
-    return decodeShareCode(orbitalRelay, code, advanceStory);
-  } catch (error) {
-    // A hand-edited or stale link should not brick the page.
-    console.warn("Ignoring an invalid share link:", error.message);
-    return startScenario(orbitalRelay);
+    const code = localStorage.getItem(key);
+    return code ? deserialize(code) : null;
+  } catch {
+    return null;
   }
 }
-
-let state = stateFromLocation();
-let latestTurn = null;
-
-function createElement(tag, className, text) {
-  const element = document.createElement(tag);
-
-  if (className) {
-    element.className = className;
+function pathURL(value) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("story", serialize(value));
+  return url.href;
+}
+function rememberEnding() {
+  if (!state.finished) return;
+  previousEnding = state;
+  try {
+    localStorage.setItem(ENDING_KEY, serialize(state));
+  } catch {
+    /* Story remains playable without storage. */
   }
-
-  if (text !== undefined) {
-    element.textContent = text;
+}
+function persist() {
+  try {
+    localStorage.setItem(SESSION_KEY, serialize(state));
+    storageAvailable = true;
+  } catch {
+    storageAvailable = false;
   }
-
-  return element;
+  try {
+    window.history.replaceState(null, "", pathURL(state));
+  } catch {
+    /* Embedded or file previews may restrict history. */
+  }
+  $("save-status").textContent = storageAvailable
+    ? "Saved on this device"
+    : "This tab only";
 }
-
-function choiceCount() {
-  return state.events.filter((event) => event.type === "choice").length;
+function paragraphs(values) {
+  const container = element("div", "scene-prose");
+  values.forEach((text) => container.append(element("p", "", text)));
+  return container;
 }
-
-function asPercent(value) {
-  return Math.round(value * 100);
+function actionButton(text, callback, className = "text-button") {
+  const button = element("button", className, text);
+  button.type = "button";
+  button.addEventListener("click", callback);
+  return button;
 }
-
-function setMetric(name, value, displayValue, fillValue = value) {
-  elements[`${name}-value`].textContent = displayValue;
-  elements[`${name}-fill`].style.width = `${asPercent(fillValue)}%`;
-  elements[`${name}-meter`].setAttribute("aria-valuenow", String(displayValue));
+function applyChoice(id) {
+  try {
+    state = choose(state, id);
+    notice("");
+    persist();
+    render(true);
+  } catch {
+    notice(
+      "That decision is no longer available. Your current path has been kept.",
+    );
+  }
 }
-
-function renderMetrics() {
-  setMetric("trust", state.trust, asPercent(state.trust));
-  setMetric("tension", state.tension, asPercent(state.tension));
-  setMetric(
-    "valence",
-    state.affect.valence,
-    Math.round(state.affect.valence * 100),
-    (state.affect.valence + 1) / 2,
+function goToDecision(count) {
+  rememberEnding();
+  state = rewind(state, count);
+  $("history-dialog").close();
+  notice("");
+  persist();
+  render(true);
+}
+function renderHistory() {
+  $("history-list").replaceChildren();
+  state.events.forEach((event, index) => {
+    const row = element("li");
+    row.append(
+      element("h3", "", event.label),
+      element("p", "", event.consequence),
+    );
+    const button = actionButton("Change this decision ↶", () =>
+      goToDecision(index),
+    );
+    button.setAttribute(
+      "aria-label",
+      `Change decision ${index + 1}: ${event.label}`,
+    );
+    row.append(button);
+    $("history-list").append(row);
+  });
+}
+function showHistory() {
+  renderHistory();
+  $("history-dialog").showModal();
+}
+function renderEnding(ending) {
+  sceneRoot.append(
+    element("p", "ending-label", "One possible ending"),
+    element("h2", "", ending.title),
+    paragraphs(ending.paragraphs),
   );
-}
-
-function renderStory() {
-  const turns = choiceCount();
-  const finished = turns >= MAX_TURNS;
-
-  elements["scenario-eyebrow"].textContent = orbitalRelay.eyebrow;
-  elements["story-title"].textContent = orbitalRelay.title;
-  elements["story-line"].textContent = finished
-    ? `${latestTurn?.narration ?? orbitalRelay.intro} That path is now fixed in the event log. Reset to try another.`
-    : latestTurn?.narration ?? orbitalRelay.intro;
-  elements["turn-label"].textContent =
-    turns === 0 ? "Scene start" : `Turn ${turns} of ${MAX_TURNS}`;
-  elements["state-fingerprint"].textContent = latestTurn?.fingerprint
-    ?? stateFingerprint(state);
-}
-
-function handleChoice(choiceId) {
-  latestTurn = advanceStory(orbitalRelay, state, choiceId, {
-    memory: { limit: 3, lambda: 0.72 },
-    planner: { horizon: 3, beamWidth: 4 },
+  const actions = element("div", "ending-actions");
+  actions.append(
+    actionButton("Change a decision ↶", showHistory, "primary-button"),
+    actionButton("Share this ending ↗", showShare),
+  );
+  sceneRoot.append(actions);
+  const trace = element("details", "trace");
+  trace.append(element("summary", "", "How your choices led here"));
+  const list = element("ol");
+  ending.callbacks.forEach((callback) => {
+    const item = element("li", "", callback.text);
+    if (callback.sourceStep > 0)
+      item.append(
+        document.createTextNode(` (Decision ${callback.sourceStep})`),
+      );
+    list.append(item);
   });
-  state = latestTurn.nextState;
-
-  // Keep the address bar in step with the story, so the URL is always a link
-  // to exactly what is on screen without anyone pressing a button.
-  window.history.replaceState(null, "", `?replay=${encodeShareCode(state)}`);
-
-  elements["scene-card"].classList.remove("is-advancing");
-  requestAnimationFrame(() => {
-    elements["scene-card"].classList.add("is-advancing");
-  });
-
-  render();
-}
-
-function renderChoices() {
-  const finished = choiceCount() >= MAX_TURNS;
-  const fragment = document.createDocumentFragment();
-
-  for (const choice of orbitalRelay.choices) {
-    const eligibility = evaluateChoiceEligibility(state, choice);
-    const button = createElement("button", "choice", undefined);
-    const copy = createElement("span", "choice__copy", undefined);
-    const label = createElement("strong", "", choice.label);
-    const hint = createElement(
-      "small",
-      "",
-      eligibility.eligible ? choice.hint : "Already part of this timeline.",
+  trace.append(list);
+  sceneRoot.append(trace);
+  if (previousEnding && serialize(previousEnding) !== serialize(state)) {
+    const previous = getEnding(previousEnding);
+    const comparison = element("section", "comparison");
+    comparison.setAttribute("aria-label", "Compare with your previous ending");
+    comparison.append(
+      element("p", "eyebrow", "Your previous path"),
+      element("h3", "", previous.title),
+      element("p", "", previous.summary),
     );
-    const arrow = createElement("span", "choice__arrow", "↗");
-
-    button.type = "button";
-    button.disabled = finished || !eligibility.eligible;
-    button.setAttribute("aria-label", `${choice.label}: ${choice.hint}`);
-    button.addEventListener("click", () => handleChoice(choice.id));
-
-    copy.append(label, hint);
-    button.append(copy, arrow);
-    fragment.append(button);
-  }
-
-  elements["choice-list"].replaceChildren(fragment);
-}
-
-function renderTimeline() {
-  const fragment = document.createDocumentFragment();
-
-  if (state.events.length === 0) {
-    const empty = createElement("li", "timeline__empty");
-    empty.append(
-      createElement("span", "timeline__index", "00"),
-      createElement(
+    const index = state.choices.findIndex(
+      (id, i) => id !== previousEnding.choices[i],
+    );
+    comparison.append(
+      element(
         "p",
         "",
-        "No events yet. Your first choice starts the replay.",
+        `The paths split at decision ${index + 1}: “${previousEnding.events[index].label}” became “${state.events[index].label}”.`,
       ),
     );
-    fragment.append(empty);
-  } else {
-    for (const [index, event] of state.events.entries()) {
-      const item = createElement("li", "timeline__item");
-      const number = createElement(
-        "span",
-        "timeline__index",
-        String(index + 1).padStart(2, "0"),
-      );
-      const copy = createElement("div", "timeline__copy");
-      const type = createElement(
-        "span",
-        `event-type event-type--${event.type}`,
-        event.type,
-      );
-      const line = createElement("p", "", event.line);
-      copy.append(type, line);
-      item.append(number, copy);
-      fragment.append(item);
-    }
-  }
-
-  elements.timeline.replaceChildren(fragment);
-}
-
-function renderMemories() {
-  const fragment = document.createDocumentFragment();
-
-  if (!latestTurn) {
-    fragment.append(
-      createElement(
-        "p",
-        "inspector-empty",
-        "Choose an action to see which memories the engine recalls—and why.",
-      ),
-    );
-  } else {
-    for (const [index, memory] of latestTurn.recalledMemories.entries()) {
-      const card = createElement("article", "memory-card");
-      const header = createElement("header", "memory-card__header");
-      const rank = createElement(
-        "span",
-        "memory-card__rank",
-        `0${index + 1}`,
-      );
-      const score = createElement(
-        "strong",
-        "",
-        `MMR ${memory.mmr.toFixed(3)}`,
-      );
-      const text = createElement("p", "", memory.text);
-      const components = createElement("div", "memory-card__components");
-
-      components.append(
-        createElement("span", "", `relevance ${memory.score.toFixed(2)}`),
-        createElement("span", "", `redundancy ${memory.redundancy.toFixed(2)}`),
-      );
-
-      for (const [name, value] of Object.entries(memory.components)) {
-        components.append(
-          createElement("span", "", `${name} ${value.toFixed(2)}`),
-        );
-      }
-
-      header.append(rank, score);
-      card.append(header, text, components);
-      fragment.append(card);
-    }
-  }
-
-  elements["memory-list"].replaceChildren(fragment);
-}
-
-function renderPlan() {
-  const fragment = document.createDocumentFragment();
-
-  if (!latestTurn || latestTurn.plan.path.length === 0) {
-    const empty = createElement("li", "inspector-empty");
-    empty.textContent =
-      "Choose an action to see the three beats that could follow.";
-    fragment.append(empty);
-    elements["planner-score"].textContent = "beam width 4";
-  } else {
-    elements["planner-score"].textContent =
-      `terminal fit ${latestTurn.plan.score.toFixed(3)}`;
-
-    for (const [index, beat] of latestTurn.plan.path.entries()) {
-      const item = createElement("li", "plan-item");
-      const indexLabel = createElement(
-        "span",
-        "plan-item__index",
-        String(index + 1),
-      );
-      const copy = createElement("div", "plan-item__copy");
-      const title = createElement("strong", "", beat.title);
-      const meta = createElement(
-        "small",
-        "",
-        `fit ${beat.components.goalFit.toFixed(2)} · continuity ${beat.components.continuity.toFixed(2)}`,
-      );
-
-      copy.append(title, meta);
-      item.append(indexLabel, copy);
-      fragment.append(item);
-    }
-  }
-
-  elements["plan-list"].replaceChildren(fragment);
-}
-
-function renderTrace() {
-  const fragment = document.createDocumentFragment();
-
-  if (!latestTurn) {
-    fragment.append(
-      createElement(
-        "p",
-        "inspector-empty",
-        "Eligibility checks and rejected beats will appear here.",
-      ),
-    );
-  } else {
-    for (const candidate of latestTurn.plan.trace) {
-      const row = createElement(
-        "div",
-        `trace-row ${candidate.eligible ? "is-eligible" : "is-rejected"}`,
-      );
-      const heading = createElement("div", "trace-row__heading");
-      heading.append(
-        createElement("strong", "", candidate.title),
-        createElement(
-          "span",
+    if (previous.id === ending.id)
+      comparison.append(
+        element(
+          "p",
           "",
-          candidate.eligible ? candidate.score.toFixed(3) : "rejected",
+          "Different choices brought Mara to the same kind of ending. The details she carries are different.",
         ),
       );
-      const reason = createElement(
-        "small",
-        "",
-        candidate.eligible
-          ? `goal ${candidate.components.goalFit.toFixed(2)} · continuity ${candidate.components.continuity.toFixed(2)}`
-          : candidate.reasons.join(" · "),
+    const link = element("a", "", "Open that path ↗");
+    link.href = pathURL(previousEnding);
+    link.target = "_blank";
+    link.rel = "noopener";
+    comparison.append(link);
+    sceneRoot.append(comparison);
+  }
+}
+function render(focus = false) {
+  const scene = getScene(state);
+  const ending = getEnding(state);
+  document.body.classList.toggle("has-progress", state.choices.length > 0);
+  sceneRoot.replaceChildren();
+  sceneRoot.classList.remove("scene-enter");
+  $("scene-location").textContent = `${scene.location} · ${scene.time}`;
+  $("scene-count").textContent = ending
+    ? "05 / 05 — Complete"
+    : `${String(state.choices.length + 1).padStart(2, "0")} / 05`;
+  $("progress").replaceChildren();
+  $("progress").setAttribute(
+    "aria-label",
+    `${state.choices.length} of 5 decisions made`,
+  );
+  for (let i = 0; i < 5; i++)
+    $("progress").append(
+      element(
+        "span",
+        i < state.choices.length
+          ? "done"
+          : i === state.choices.length
+            ? "current"
+            : "",
+      ),
+    );
+  if (ending) renderEnding(ending);
+  else {
+    sceneRoot.append(
+      element(
+        "p",
+        "chapter-label",
+        `Chapter ${String(scene.chapter).padStart(2, "0")}`,
+      ),
+      element("h2", "", scene.title),
+      paragraphs(scene.paragraphs),
+    );
+    if (scene.memory) {
+      const memory = element("aside", "memory-callback");
+      memory.setAttribute("aria-label", "A remembered choice");
+      memory.append(
+        element(
+          "p",
+          "eyebrow",
+          scene.memory.sourceStep > 0
+            ? `She remembers · Decision ${scene.memory.sourceStep}`
+            : "Before this evening",
+        ),
+        element("p", "", scene.memory.text),
       );
-      row.append(heading, reason);
-      fragment.append(row);
+      sceneRoot.append(memory);
     }
+    sceneRoot.append(element("p", "choices-prompt", "What does Mara do?"));
+    const choices = element("div", "choices");
+    choices.setAttribute("role", "group");
+    choices.setAttribute("aria-label", "Make Mara’s next decision");
+    scene.choices.forEach((choice, i) => {
+      const button = actionButton("", () => applyChoice(choice.id), "choice");
+      button.dataset.choice = choice.id;
+      const number = element(
+        "span",
+        "choice-number",
+        String(i + 1).padStart(2, "0"),
+      );
+      number.setAttribute("aria-hidden", "true");
+      const label = element("span");
+      label.append(element("span", "choice-label", choice.label));
+      if (choice.description)
+        label.append(element("span", "choice-description", choice.description));
+      const arrow = element("span", "choice-arrow", "↗");
+      arrow.setAttribute("aria-hidden", "true");
+      button.append(number, label, arrow);
+      choices.append(button);
+    });
+    sceneRoot.append(choices);
   }
-
-  elements["trace-list"].replaceChildren(fragment);
+  $("undo-button").disabled = !state.choices.length;
+  $("history-button").disabled = !state.choices.length;
+  $("reset-button").disabled = !state.choices.length;
+  $("announcer").textContent = ending
+    ? `Story complete. ${ending.title}`
+    : `Decision ${state.choices.length + 1} of 5. ${scene.title}`;
+  if (focus) {
+    sceneRoot.focus({ preventScroll: true });
+    if (window.matchMedia("(max-width: 640px)").matches)
+      sceneRoot.scrollIntoView({ behavior: "instant", block: "start" });
+  }
+  requestAnimationFrame(() => sceneRoot.classList.add("scene-enter"));
 }
-
-function render() {
-  renderStory();
-  renderMetrics();
-  renderChoices();
-  renderTimeline();
-  renderMemories();
-  renderPlan();
-  renderTrace();
+function showShare() {
+  $("share-url").value = pathURL(state);
+  $("copy-status").textContent = "";
+  $("share-dialog").showModal();
 }
-
-function resetStory() {
-  state = startScenario(orbitalRelay);
-  latestTurn = null;
-  elements["scene-card"].classList.remove("is-advancing");
-  window.history.replaceState(null, "", window.location.pathname);
-  render();
-}
-
-function shareLink() {
-  const url = new URL(window.location.href);
-  url.search = state.events.length > 0 ? `?replay=${encodeShareCode(state)}` : "";
-  return url.toString();
-}
-
-async function copyShareLink() {
-  const link = shareLink();
-  const button = elements["share-button"];
-  const original = button.textContent;
-
+$("copy-button").addEventListener("click", async () => {
   try {
-    await navigator.clipboard.writeText(link);
-    button.textContent = "Link copied";
+    await navigator.clipboard.writeText($("share-url").value);
+    $("copy-status").textContent = "Link copied.";
   } catch {
-    // Clipboard access is denied in some contexts; showing the URL still lets
-    // someone copy it by hand, which is better than a button that does nothing.
-    window.prompt("Copy this link:", link);
-    button.textContent = original;
-    return;
+    $("share-url").focus();
+    $("share-url").select();
+    $("copy-status").textContent =
+      "Copy the selected link with your device’s copy command.";
   }
-
-  setTimeout(() => {
-    button.textContent = original;
-  }, 1600);
-}
-
-elements["reset-button"].addEventListener("click", resetStory);
-elements["share-button"].addEventListener("click", copyShareLink);
-document.addEventListener("keydown", (event) => {
-  if (event.metaKey || event.ctrlKey) return;
-
-  const key = event.key.toLowerCase();
-  if (key === "r") resetStory();
-  if (key === "s") copyShareLink();
 });
-
+$("about-button").addEventListener("click", () =>
+  $("about-dialog").showModal(),
+);
+$("history-button").addEventListener("click", showHistory);
+$("undo-button").addEventListener("click", () =>
+  goToDecision(state.choices.length - 1),
+);
+$("share-button").addEventListener("click", showShare);
+$("reset-button").addEventListener("click", () =>
+  $("reset-dialog").showModal(),
+);
+$("confirm-reset").addEventListener("click", () => {
+  rememberEnding();
+  state = createStory();
+  $("reset-dialog").close();
+  notice("");
+  persist();
+  render(true);
+});
+document
+  .querySelectorAll("[data-close]")
+  .forEach((button) =>
+    button.addEventListener("click", () => button.closest("dialog").close()),
+  );
+document.querySelectorAll("dialog").forEach((dialog) =>
+  dialog.addEventListener("click", (event) => {
+    if (event.target !== dialog) return;
+    const rect = dialog.getBoundingClientRect();
+    if (
+      event.clientX < rect.left ||
+      event.clientX > rect.right ||
+      event.clientY < rect.top ||
+      event.clientY > rect.bottom
+    )
+      dialog.close();
+  }),
+);
+document.addEventListener("keydown", (event) => {
+  if (
+    event.repeat ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    document.querySelector("dialog[open]")
+  )
+    return;
+  if (
+    event.target.closest(
+      'button, a, input, textarea, select, summary, [contenteditable="true"]',
+    )
+  )
+    return;
+  const index = Number(event.key) - 1;
+  if (!/^[1-3]$/.test(event.key) || state.finished) return;
+  const choice = getScene(state).choices[index];
+  if (choice) {
+    event.preventDefault();
+    applyChoice(choice.id);
+  }
+});
+previousEnding = readSaved(ENDING_KEY);
+if (previousEnding && !previousEnding.finished) previousEnding = null;
+const savedState = readSaved(SESSION_KEY);
+const params = new URLSearchParams(window.location.search);
+if (params.has("story")) {
+  try {
+    const incomingState = deserialize(params.get("story"));
+    if (
+      savedState?.finished &&
+      serialize(savedState) !== serialize(incomingState)
+    ) {
+      state = savedState;
+      rememberEnding();
+    }
+    state = incomingState;
+  } catch {
+    state = savedState ?? createStory();
+    notice(
+      "This story link could not be read. Your saved path is still here, or you can start a new one.",
+    );
+  }
+} else {
+  state = savedState ?? createStory();
+  if (state.choices.length)
+    notice("Welcome back. Your story is where you left it.");
+  if (params.has("replay"))
+    notice(
+      "This link belongs to the earlier orbital-relay demo. Meet Mara in the new story below.",
+    );
+}
+persist();
 render();
